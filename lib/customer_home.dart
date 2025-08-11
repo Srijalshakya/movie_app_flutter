@@ -7,6 +7,8 @@ import 'package:movie_app/SeatBookingScreen.dart';
 import 'package:movie_app/profile.dart';
 import 'package:movie_app/movie_details_screen.dart';
 
+import 'booking_hisotry_screen.dart';
+
 class HomeScreen extends StatefulWidget {
   final String uid;
   const HomeScreen({super.key, required this.uid});
@@ -15,18 +17,36 @@ class HomeScreen extends StatefulWidget {
   _HomeScreenState createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final DateTime currentDate = DateTime.now().toUtc().add(const Duration(hours: 5, minutes: 45));
   Future<List<Map<String, dynamic>>> _hallsFuture = Future.value([]);
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
   void initState() {
     super.initState();
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
+    );
+    _animationController.forward();
+
     _hallsFuture = _fetchHalls().catchError((e) {
       print('Error fetching halls: $e');
       return <Map<String, dynamic>>[];
     });
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
   }
 
   Future<List<Map<String, dynamic>>> _fetchHalls() async {
@@ -84,145 +104,577 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF141414),
-      appBar: AppBar(
-        title: const Text('Cinemas', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 24)),
-        backgroundColor: const Color(0xFFE50914),
-        elevation: 0,
-      ),
-      drawer: Drawer(
-        backgroundColor: const Color(0xFF141414),
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: [
-            DrawerHeader(
+      key: _scaffoldKey,
+      backgroundColor: const Color(0xFF0D1117),
+      body: CustomScrollView(
+        slivers: [
+          // Modern App Bar with gradient
+          SliverAppBar(
+            expandedHeight: 120.0,
+            floating: false,
+            pinned: true,
+            elevation: 0,
+            backgroundColor: Colors.transparent,
+            leading: Container(),
+            flexibleSpace: Container(
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Color(0xFFE50914), Color(0xFFB20710)],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFF1a1d29),
+                    Color(0xFF0D1117),
+                  ],
                 ),
               ),
-              child: const Text('Menu', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-            ),
-            ListTile(
-              leading: const Icon(Icons.movie, color: Colors.white70),
-              title: const Text('Movies', style: TextStyle(color: Colors.white)),
-              onTap: () => Navigator.pop(context),
-            ),
-            ListTile(
-              leading: const Icon(Icons.person, color: Colors.white70),
-              title: const Text('Profile', style: TextStyle(color: Colors.white)),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => ProfileScreen(uid: widget.uid),
-                  ),
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.logout, color: Colors.white70),
-              title: const Text('Logout', style: TextStyle(color: Colors.white)),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.pushReplacementNamed(context, '/login');
-              },
-            ),
-          ],
-        ),
-      ),
-      body: FutureBuilder<List<Map<String, dynamic>>>(
-        future: _hallsFuture,
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.red, fontSize: 16)));
-          }
-          if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(child: Text('No halls available.', style: TextStyle(color: Colors.white54, fontSize: 18)));
-          }
-          final halls = snapshot.data!;
-          return ListView.builder(
-            padding: const EdgeInsets.all(16.0),
-            itemCount: halls.length,
-            itemBuilder: (context, index) {
-              final hall = halls[index];
-              final imageBytes = _decodeImage(hall['imageUrl']);
-              return Card(
-                elevation: 6,
-                margin: const EdgeInsets.only(bottom: 20),
-                color: const Color(0xFF2A2A2A),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                child: InkWell(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => HallMoviesScreen(hallId: hall['id'], userId: widget.uid),
+              child: FlexibleSpaceBar(
+                title: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                    );
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                      child: const Icon(
+                        Icons.local_movies,
+                        color: Color(0xFFFF6B6B),
+                        size: 24,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const Text(
+                      'CineMax',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 24,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+                centerTitle: false,
+                titlePadding: const EdgeInsets.only(left: 20, bottom: 16),
+              ),
+            ),
+          ),
+
+          // Header section with location and menu
+          SliverToBoxAdapter(
+            child: FadeTransition(
+              opacity: _fadeAnimation,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
                       children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: imageBytes != null
-                              ? Image.memory(
-                            imageBytes,
-                            width: 120,
-                            height: 160,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return Container(
-                                width: 120,
-                                height: 160,
-                                color: Colors.grey,
-                                child: const Icon(Icons.image, color: Colors.white54),
-                              );
-                            },
-                          )
-                              : Container(
-                            width: 120,
-                            height: 160,
-                            color: Colors.grey,
-                            child: const Icon(Icons.image, color: Colors.white54),
+                        const Icon(Icons.location_on, color: Color(0xFFFF6B6B), size: 20),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Kathmandu, Nepal',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                hall['name'],
-                                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 22),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Location: ${hall['location']}',
-                                style: const TextStyle(color: Colors.white70, fontSize: 16),
-                              ),
-                            ],
+                        const Spacer(),
+                        GestureDetector(
+                          onTap: () => _scaffoldKey.currentState?.openDrawer(),
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(Icons.menu, color: Colors.white),
                           ),
                         ),
                       ],
                     ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      'Choose Your Cinema',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Book tickets for the latest movies',
+                      style: TextStyle(
+                        color: Colors.white60,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // Cinema halls list
+          SliverToBoxAdapter(
+            child: FutureBuilder<List<Map<String, dynamic>>>(
+              future: _hallsFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return Container(
+                    height: 400,
+                    child: const Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFF6B6B)),
+                          ),
+                          SizedBox(height: 16),
+                          Text(
+                            'Loading cinemas...',
+                            style: TextStyle(color: Colors.white70),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                if (snapshot.hasError) {
+                  return Container(
+                    height: 200,
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.error_outline, color: Colors.red, size: 48),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Error: ${snapshot.error}',
+                            style: const TextStyle(color: Colors.red, fontSize: 16),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return Container(
+                    height: 300,
+                    child: const Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.movie_outlined, color: Colors.white30, size: 64),
+                          SizedBox(height: 16),
+                          Text(
+                            'No cinemas available',
+                            style: TextStyle(
+                              color: Colors.white54,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            'Check back later for updates',
+                            style: TextStyle(color: Colors.white30),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                final halls = snapshot.data!;
+                return ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  itemCount: halls.length,
+                  separatorBuilder: (context, index) => const SizedBox(height: 16),
+                  itemBuilder: (context, index) {
+                    final hall = halls[index];
+                    final imageBytes = _decodeImage(hall['imageUrl']);
+
+                    return TweenAnimationBuilder<double>(
+                      duration: Duration(milliseconds: 600 + (index * 100)),
+                      tween: Tween(begin: 0.0, end: 1.0),
+                      builder: (context, value, child) {
+                        return Transform.translate(
+                          offset: Offset(0, 30 * (1 - value)),
+                          child: Opacity(
+                            opacity: value,
+                            child: child,
+                          ),
+                        );
+                      },
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(20),
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              const Color(0xFF1e2328),
+                              const Color(0xFF161b22),
+                            ],
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.3),
+                              blurRadius: 15,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
+                        ),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(20),
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => HallMoviesScreen(
+                                    hallId: hall['id'],
+                                    userId: widget.uid,
+                                  ),
+                                ),
+                              );
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.all(20),
+                              child: Row(
+                                children: [
+                                  // Cinema Image
+                                  Hero(
+                                    tag: 'cinema_${hall['id']}',
+                                    child: Container(
+                                      width: 100,
+                                      height: 120,
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(16),
+                                        gradient: LinearGradient(
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                          colors: [
+                                            const Color(0xFFFF6B6B).withOpacity(0.3),
+                                            const Color(0xFF4ECDC4).withOpacity(0.3),
+                                          ],
+                                        ),
+                                      ),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(16),
+                                        child: imageBytes != null
+                                            ? Image.memory(
+                                          imageBytes,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (context, error, stackTrace) {
+                                            return _buildDefaultCinemaIcon();
+                                          },
+                                        )
+                                            : _buildDefaultCinemaIcon(),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 20),
+
+                                  // Cinema Details
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          hall['name'],
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 20,
+                                            letterSpacing: 0.5,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Row(
+                                          children: [
+                                            Icon(
+                                              Icons.location_on_outlined,
+                                              color: Colors.white60,
+                                              size: 16,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Expanded(
+                                              child: Text(
+                                                hall['location'],
+                                                style: const TextStyle(
+                                                  color: Colors.white60,
+                                                  fontSize: 14,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 20),
+
+                                        // Action button
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 16,
+                                            vertical: 8,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            gradient: const LinearGradient(
+                                              colors: [Color(0xFFFF6B6B), Color(0xFFFF8E53)],
+                                            ),
+                                            borderRadius: BorderRadius.circular(20),
+                                          ),
+                                          child: const Text(
+                                            'View Movies',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+
+                                  // Arrow icon
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: const Icon(
+                                      Icons.arrow_forward_ios,
+                                      color: Colors.white70,
+                                      size: 16,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+
+          // Bottom padding
+          const SliverToBoxAdapter(
+            child: SizedBox(height: 30),
+          ),
+        ],
+      ),
+
+      // Modern Drawer
+      drawer: Drawer(
+        backgroundColor: const Color(0xFF0D1117),
+        child: Column(
+          children: [
+            // Drawer Header
+            Container(
+              height: 200,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFF1a1d29),
+                    Color(0xFF0D1117),
+                  ],
+                ),
+              ),
+              child: SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFF6B6B).withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: const Icon(
+                          Icons.person,
+                          color: Color(0xFFFF6B6B),
+                          size: 32,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Welcome Back!',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const Text(
+                        'Enjoy your movie experience',
+                        style: TextStyle(
+                          color: Colors.white60,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              );
-            },
-          );
-        },
+              ),
+            ),
+
+            // Menu Items
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.all(8),
+                children: [
+                  _buildModernListTile(
+                    icon: Icons.local_movies,
+                    title: 'Movies',
+                    subtitle: 'Browse all movies',
+                    onTap: () => Navigator.pop(context),
+                  ),
+                  _buildModernListTile(
+                    icon: Icons.person_outline,
+                    title: 'Profile',
+                    subtitle: 'Manage your account',
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ProfileScreen(uid: widget.uid),
+                        ),
+                      );
+                    },
+                  ),
+                _buildModernListTile(
+                    icon: Icons.history,
+                    title: 'Booking History',
+                    subtitle: 'View past bookings',
+                    onTap: () {
+                      Navigator.pop(context); // Close the drawer
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => BookingHistoryScreen(uid: widget.uid),
+                        ),
+                      );
+                    },
+                ),
+                  const Divider(color: Colors.white10, height: 32),
+                  _buildModernListTile(
+                    icon: Icons.logout,
+                    title: 'Logout',
+                    subtitle: 'Sign out of account',
+                    isDestructive: true,
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.pushReplacementNamed(context, '/login');
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDefaultCinemaIcon() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            const Color(0xFFFF6B6B).withOpacity(0.3),
+            const Color(0xFF4ECDC4).withOpacity(0.3),
+          ],
+        ),
+      ),
+      child: const Center(
+        child: Icon(
+          Icons.local_movies,
+          color: Colors.white70,
+          size: 40,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModernListTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+    bool isDestructive = false,
+  }) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: ListTile(
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: (isDestructive ? Colors.red : const Color(0xFFFF6B6B))
+                .withOpacity(0.2),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(
+            icon,
+            color: isDestructive ? Colors.red : const Color(0xFFFF6B6B),
+            size: 20,
+          ),
+        ),
+        title: Text(
+          title,
+          style: TextStyle(
+            color: isDestructive ? Colors.red : Colors.white,
+            fontWeight: FontWeight.w600,
+            fontSize: 16,
+          ),
+        ),
+        subtitle: Text(
+          subtitle,
+          style: TextStyle(
+            color: isDestructive ? Colors.red.withOpacity(0.7) : Colors.white60,
+            fontSize: 12,
+          ),
+        ),
+        trailing: Icon(
+          Icons.arrow_forward_ios,
+          color: isDestructive ? Colors.red.withOpacity(0.7) : Colors.white30,
+          size: 16,
+        ),
+        onTap: onTap,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }
 }
 
+// Modern HallMoviesScreen with updated UI
 class HallMoviesScreen extends StatefulWidget {
   final String hallId;
   final String userId;
@@ -232,7 +684,7 @@ class HallMoviesScreen extends StatefulWidget {
   _HallMoviesScreenState createState() => _HallMoviesScreenState();
 }
 
-class _HallMoviesScreenState extends State<HallMoviesScreen> {
+class _HallMoviesScreenState extends State<HallMoviesScreen> with TickerProviderStateMixin {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final DateTime currentDate = DateTime.now().toUtc().add(const Duration(hours: 5, minutes: 45));
   String? selectedDate;
@@ -241,14 +693,31 @@ class _HallMoviesScreenState extends State<HallMoviesScreen> {
   String? selectedShowtimeId;
   List<Map<String, dynamic>> movieDetailsList = [];
   Future<List<Map<String, dynamic>>> _moviesFuture = Future.value([]);
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
 
   @override
   void initState() {
     super.initState();
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
+    );
+    _animationController.forward();
+
     _moviesFuture = _fetchMovies().catchError((e) {
       print('Error fetching movies: $e');
       return <Map<String, dynamic>>[];
     });
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
   }
 
   Future<List<Map<String, dynamic>>> _fetchMovies() async {
@@ -510,272 +979,550 @@ class _HallMoviesScreenState extends State<HallMoviesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF141414),
-      appBar: AppBar(
-        title: const Text('Movies in Hall', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 24)),
-        backgroundColor: const Color(0xFFE50914),
-        elevation: 0,
-      ),
-      body: FutureBuilder<List<Map<String, dynamic>>>(
-        future: _moviesFuture,
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.red, fontSize: 16)));
-          }
-          if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(child: Text('No upcoming movies available.', style: TextStyle(color: Colors.white54, fontSize: 18)));
-          }
-          final movies = snapshot.data!;
-          final Map<String, List<Map<String, dynamic>>> movieGroups = {};
-          for (var movie in movies) {
-            final movieName = movie['name'] as String;
-            if (!movieGroups.containsKey(movieName)) {
-              movieGroups[movieName] = [];
-            }
-            movieGroups[movieName]!.add(movie);
-          }
-          return ListView.builder(
-            padding: const EdgeInsets.all(16.0),
-            itemCount: movieGroups.length,
-            itemBuilder: (context, index) {
-              final movieName = movieGroups.keys.elementAt(index);
-              final movieList = movieGroups[movieName]!;
-              final availableDates = getAvailableDates(movieList);
-              final availableTimes = selectedDate != null ? getAvailableTimes(movieList) : [];
-
-              final movieDetail = movieDetailsList.isNotEmpty && index < movieDetailsList.length
-                  ? movieDetailsList[index]
-                  : movieList[0];
-              final imageBytes = _decodeImage(movieList[0]['imageUrl']);
-
-              return Card(
-                elevation: 6,
-                margin: const EdgeInsets.only(bottom: 20),
-                color: const Color(0xFF2A2A2A),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                      Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                      InkWell(
-                      onTap: () {
-                print('Navigating to MovieDetailScreen with movie: $movieDetail');
-                Navigator.push(
-                context,
-                MaterialPageRoute(
-                builder: (context) => MovieDetailScreen(),
-                settings: RouteSettings(arguments: movieDetail),
+      backgroundColor: const Color(0xFF0D1117),
+      body: CustomScrollView(
+        slivers: [
+          // Modern App Bar
+          SliverAppBar(
+            expandedHeight: 100.0,
+            floating: false,
+            pinned: true,
+            elevation: 0,
+            backgroundColor: Colors.transparent,
+            flexibleSpace: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFF1a1d29),
+                    Color(0xFF0D1117),
+                  ],
                 ),
-                ).catchError((e) {
-                print('Navigation error: $e');
-                });
-                },
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: imageBytes != null
-                        ? Image.memory(
-                      imageBytes,
-                      width: 120,
-                      height: 160,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Container(
-                          width: 120,
-                          height: 160,
-                          color: Colors.grey,
-                          child: const Icon(Icons.image, color: Colors.white54),
-                        );
-                      },
-                    )
-                        : Container(
-                      width: 120,
-                      height: 160,
-                      color: Colors.grey,
-                      child: const Icon(Icons.image, color: Colors.white54),
-                    ),
+              ),
+              child: const FlexibleSpaceBar(
+                title: Text(
+                  'Movies in Hall',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 24,
                   ),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                      Text(
-                      movieName,
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 22),
-                    ),
-                    const SizedBox(height: 16),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 8.0),
-                      color: Colors.grey[800],
-                      child: const Text(
-                        'Select Date',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                centerTitle: false,
+                titlePadding: EdgeInsets.only(left: 60, bottom: 16),
+              ),
+            ),
+            leading: Container(
+              margin: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.white),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ),
+          ),
+
+          // Movies Content
+          SliverToBoxAdapter(
+            child: FadeTransition(
+              opacity: _fadeAnimation,
+              child: FutureBuilder<List<Map<String, dynamic>>>(
+                future: _moviesFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return Container(
+                      height: 400,
+                      child: const Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            CircularProgressIndicator(
+                              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFF6B6B)),
+                            ),
+                            SizedBox(height: 16),
+                            Text(
+                              'Loading movies...',
+                              style: TextStyle(color: Colors.white70),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 10),
-                    if (availableDates.isEmpty)
-                const Text(
-                'No upcoming dates available.',
-                style: TextStyle(color: Colors.white54, fontSize: 16),
-              )
-              else
-              GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              childAspectRatio: 2,
-              crossAxisSpacing: 8,
-              mainAxisSpacing: 8,
+                    );
+                  }
+
+                  if (snapshot.hasError) {
+                    return Container(
+                      height: 200,
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.error_outline, color: Colors.red, size: 48),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Error: ${snapshot.error}',
+                              style: const TextStyle(color: Colors.red, fontSize: 16),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+
+                  if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                    return Container(
+                      height: 300,
+                      child: const Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.movie_outlined, color: Colors.white30, size: 64),
+                            SizedBox(height: 16),
+                            Text(
+                              'No upcoming movies available',
+                              style: TextStyle(
+                                color: Colors.white54,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            SizedBox(height: 8),
+                            Text(
+                              'Check back later for updates',
+                              style: TextStyle(color: Colors.white30),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+
+                  final movies = snapshot.data!;
+                  final Map<String, List<Map<String, dynamic>>> movieGroups = {};
+                  for (var movie in movies) {
+                    final movieName = movie['name'] as String;
+                    if (!movieGroups.containsKey(movieName)) {
+                      movieGroups[movieName] = [];
+                    }
+                    movieGroups[movieName]!.add(movie);
+                  }
+
+                  return ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(20),
+                    itemCount: movieGroups.length,
+                    separatorBuilder: (context, index) => const SizedBox(height: 20),
+                    itemBuilder: (context, index) {
+                      final movieName = movieGroups.keys.elementAt(index);
+                      final movieList = movieGroups[movieName]!;
+                      final availableDates = getAvailableDates(movieList);
+                      final availableTimes = selectedDate != null ? getAvailableTimes(movieList) : [];
+
+                      final movieDetail = movieDetailsList.isNotEmpty && index < movieDetailsList.length
+                          ? movieDetailsList[index]
+                          : movieList[0];
+                      final imageBytes = _decodeImage(movieList[0]['imageUrl']);
+
+                      return TweenAnimationBuilder<double>(
+                        duration: Duration(milliseconds: 600 + (index * 100)),
+                        tween: Tween(begin: 0.0, end: 1.0),
+                        builder: (context, value, child) {
+                          return Transform.translate(
+                            offset: Offset(0, 30 * (1 - value)),
+                            child: Opacity(
+                              opacity: value,
+                              child: child,
+                            ),
+                          );
+                        },
+                        child: Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(20),
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [
+                                const Color(0xFF1e2328),
+                                const Color(0xFF161b22),
+                              ],
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.3),
+                                blurRadius: 15,
+                                offset: const Offset(0, 8),
+                              ),
+                            ],
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Movie Header
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // Movie Poster
+                                    GestureDetector(
+                                      onTap: () {
+                                        print('Navigating to MovieDetailScreen with movie: $movieDetail');
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) => MovieDetailScreen(),
+                                            settings: RouteSettings(arguments: movieDetail),
+                                          ),
+                                        ).catchError((e) {
+                                          print('Navigation error: $e');
+                                        });
+                                      },
+                                      child: Hero(
+                                        tag: 'movie_${movieDetail['id']}',
+                                        child: Container(
+                                          width: 120,
+                                          height: 160,
+                                          decoration: BoxDecoration(
+                                            borderRadius: BorderRadius.circular(16),
+                                            gradient: LinearGradient(
+                                              begin: Alignment.topLeft,
+                                              end: Alignment.bottomRight,
+                                              colors: [
+                                                const Color(0xFFFF6B6B).withOpacity(0.3),
+                                                const Color(0xFF4ECDC4).withOpacity(0.3),
+                                              ],
+                                            ),
+                                          ),
+                                          child: ClipRRect(
+                                            borderRadius: BorderRadius.circular(16),
+                                            child: imageBytes != null
+                                                ? Image.memory(
+                                              imageBytes,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (context, error, stackTrace) {
+                                                return _buildDefaultMovieIcon();
+                                              },
+                                            )
+                                                : _buildDefaultMovieIcon(),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 20),
+
+                                    // Movie Info
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            movieName,
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 22,
+                                              letterSpacing: 0.5,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 8),
+                                          if (movieDetail['rating'] != 'N/A')
+                                            Row(
+                                              children: [
+                                                const Icon(Icons.star, color: Colors.amber, size: 16),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  movieDetail['rating'],
+                                                  style: const TextStyle(color: Colors.white70, fontSize: 14),
+                                                ),
+                                              ],
+                                            ),
+                                          if (movieDetail['duration'] != 'N/A')
+                                            Padding(
+                                              padding: const EdgeInsets.only(top: 4),
+                                              child: Row(
+                                                children: [
+                                                  const Icon(Icons.access_time, color: Colors.white60, size: 16),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    movieDetail['duration'],
+                                                    style: const TextStyle(color: Colors.white60, fontSize: 14),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+
+                                const SizedBox(height: 24),
+
+                                // Date Selection Section
+                                Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                                  decoration: BoxDecoration(
+                                    gradient: const LinearGradient(
+                                      colors: [Color(0xFFFF6B6B), Color(0xFFFF8E53)],
+                                    ),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: const Text(
+                                    'Select Date',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+
+                                const SizedBox(height: 16),
+
+                                if (availableDates.isEmpty)
+                                  const Padding(
+                                    padding: EdgeInsets.all(16),
+                                    child: Center(
+                                      child: Text(
+                                        'No upcoming dates available.',
+                                        style: TextStyle(color: Colors.white54, fontSize: 16),
+                                      ),
+                                    ),
+                                  )
+                                else
+                                  Wrap(
+                                    spacing: 12,
+                                    runSpacing: 12,
+                                    children: availableDates.map((date) {
+                                      final isSelected = selectedDate == date['iso'];
+                                      return GestureDetector(
+                                        onTap: () {
+                                          setState(() {
+                                            selectedDate = date['iso'];
+                                            selectedTime = null;
+                                            selectedMovieId = null;
+                                            selectedShowtimeId = null;
+                                          });
+                                        },
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                          decoration: BoxDecoration(
+                                            color: isSelected
+                                                ? const Color(0xFFFF6B6B)
+                                                : Colors.white.withOpacity(0.1),
+                                            borderRadius: BorderRadius.circular(20),
+                                            border: Border.all(
+                                              color: isSelected
+                                                  ? const Color(0xFFFF6B6B)
+                                                  : Colors.white.withOpacity(0.3),
+                                            ),
+                                          ),
+                                          child: Text(
+                                            date['display']!,
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              color: isSelected ? Colors.white : Colors.white70,
+                                              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    }).toList(),
+                                  ),
+
+                                // Time Selection Section
+                                if (selectedDate != null) ...[
+                                  const SizedBox(height: 24),
+                                  Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                                    decoration: BoxDecoration(
+                                      gradient: const LinearGradient(
+                                        colors: [Color(0xFF4ECDC4), Color(0xFF44A08D)],
+                                      ),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: const Text(
+                                      'Select Time',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+
+                                  const SizedBox(height: 16),
+
+                                  if (availableTimes.isEmpty)
+                                    const Padding(
+                                      padding: EdgeInsets.all(16),
+                                      child: Center(
+                                        child: Text(
+                                          'No upcoming showtimes available.',
+                                          style: TextStyle(color: Colors.white54, fontSize: 16),
+                                        ),
+                                      ),
+                                    )
+                                  else
+                                    Wrap(
+                                      spacing: 12,
+                                      runSpacing: 12,
+                                      children: availableTimes.map((timeData) {
+                                        final time = timeData['time'];
+                                        final isSelected = selectedTime == time;
+                                        return GestureDetector(
+                                          onTap: () {
+                                            setState(() {
+                                              selectedTime = time;
+                                              selectedMovieId = timeData['movieId'];
+                                              selectedShowtimeId = timeData['showtimeId'];
+                                            });
+                                          },
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                            decoration: BoxDecoration(
+                                              color: isSelected
+                                                  ? const Color(0xFF4ECDC4)
+                                                  : Colors.white.withOpacity(0.1),
+                                              borderRadius: BorderRadius.circular(20),
+                                              border: Border.all(
+                                                color: isSelected
+                                                    ? const Color(0xFF4ECDC4)
+                                                    : Colors.white.withOpacity(0.3),
+                                              ),
+                                            ),
+                                            child: Text(
+                                              time,
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                color: isSelected ? Colors.white : Colors.white70,
+                                                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ),
+                                ],
+
+                                // Proceed Button
+                                if (selectedDate != null && selectedTime != null && selectedMovieId != null && selectedShowtimeId != null) ...[
+                                  const SizedBox(height: 24),
+                                  Container(
+                                    width: double.infinity,
+                                    height: 56,
+                                    decoration: BoxDecoration(
+                                      gradient: const LinearGradient(
+                                        colors: [Color(0xFFFF6B6B), Color(0xFFFF8E53)],
+                                      ),
+                                      borderRadius: BorderRadius.circular(28),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: const Color(0xFFFF6B6B).withOpacity(0.3),
+                                          blurRadius: 12,
+                                          offset: const Offset(0, 6),
+                                        ),
+                                      ],
+                                    ),
+                                    child: ElevatedButton(
+                                      onPressed: () {
+                                        final selectedMovie = movieList.firstWhere(
+                                              (m) => m['id'] == selectedMovieId,
+                                          orElse: () => {
+                                            'price': 0.0,
+                                            'name': movieName,
+                                            'showtimeId': selectedShowtimeId,
+                                          },
+                                        );
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) => SeatSelectionScreen(
+                                              hallId: widget.hallId,
+                                              movieId: selectedMovieId!,
+                                              movieName: movieName,
+                                              price: (selectedMovie['price'] as num?)?.toDouble() ?? 0.0,
+                                              userId: widget.userId,
+                                              showtimeId: selectedShowtimeId!,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.transparent,
+                                        shadowColor: Colors.transparent,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(28),
+                                        ),
+                                      ),
+                                      child: const Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Text(
+                                            'Book Seats',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          SizedBox(width: 8),
+                                          Icon(Icons.arrow_forward, color: Colors.white),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  );
+                },
               ),
-              itemCount: availableDates.length,
-              itemBuilder: (context, index) {
-              final date = availableDates[index];
-              final isSelected = selectedDate == date['iso'];
-              return GestureDetector(
-              onTap: () {
-              setState(() {
-              selectedDate = date['iso'];
-              selectedTime = null;
-              selectedMovieId = null;
-              selectedShowtimeId = null;
-              });
-              },
-              child: Container(
-              decoration: BoxDecoration(
-              color: isSelected ? Colors.yellow : Colors.white,
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: Colors.black54),
-              ),
-              child: Center(
-              child: Text(
-              date['display']!,
-              style: const TextStyle(fontSize: 14, color: Colors.black87),
-              ),
-              ),
-              ),
-              );
-              },
-              ),
-              const SizedBox(height: 20),
-              if (selectedDate != null)
-              Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-              Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
-              color: Colors.grey[800],
-              child: const Text(
-              'Select Time',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              ),
-              const SizedBox(height: 10),
-              if (availableTimes.isEmpty)
-              const Text(
-              'No upcoming showtimes available.',
-              style: TextStyle(color: Colors.white54, fontSize: 16),
-              )
-              else
-              GridView.builder(
-              shrinkWrap: true,
-              physics:  NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              childAspectRatio: 2,
-              crossAxisSpacing: 8,
-              mainAxisSpacing: 8,
-              ),
-              itemCount: availableTimes.length,
-              itemBuilder: (context, index) {
-              final timeData = availableTimes[index];
-              final time = timeData['time'];
-              final isSelected = selectedTime == time;
-              return GestureDetector(
-              onTap: () {
-              setState(() {
-              selectedTime = time;
-              selectedMovieId = timeData['movieId'];
-              selectedShowtimeId = timeData['showtimeId'];
-              });
-              },
-              child: Container(
-              decoration: BoxDecoration(
-              color: isSelected ? Colors.yellow : Colors.white,
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: Colors.black54),
-              ),
-              child: Center(
-              child: Text(
-              time,
-              style: const TextStyle(fontSize: 14, color: Colors.black87),
-              ),
-              ),
-              ),
-              );
-              },
-              ),
-              ],
-              ),
-              const SizedBox(height: 20),
-              if (selectedDate != null && selectedTime != null && selectedMovieId != null && selectedShowtimeId != null)
-              ElevatedButton(
-              onPressed: () {
-              final selectedMovie = movieList.firstWhere(
-              (m) => m['id'] == selectedMovieId,
-              orElse: () => {
-              'price': 0.0,
-              'name': movieName,
-              'showtimeId': selectedShowtimeId,
-              },
-              );
-              Navigator.push(
-              context,
-              MaterialPageRoute(
-              builder: (context) => SeatSelectionScreen(
-              hallId: widget.hallId,
-              movieId: selectedMovieId!,
-              movieName: movieName,
-              price: (selectedMovie['price'] as num?)?.toDouble() ?? 0.0,
-              userId: widget.userId,
-              showtimeId: selectedShowtimeId!,
-              ),
-              ),
-              );
-              },
-              style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFE50914),
-              minimumSize: const Size(double.infinity, 50),
-              ),
-              child: const Text('Next', style: TextStyle(color: Colors.white, fontSize: 18)),
-              ),
-              ],
-              ),
-              ),
-              ],
-              ),
-              ],
-              ),
-              ),
-              );
-            },
-          );
-        },
+            ),
+          ),
+
+          // Bottom padding
+          const SliverToBoxAdapter(
+            child: SizedBox(height: 30),
+          ),
+        ],
       ),
     );
   }
 
-  @override
-  void dispose() {
-    super.dispose();
+  Widget _buildDefaultMovieIcon() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            const Color(0xFFFF6B6B).withOpacity(0.3),
+            const Color(0xFF4ECDC4).withOpacity(0.3),
+          ],
+        ),
+      ),
+      child: const Center(
+        child: Icon(
+          Icons.movie,
+          color: Colors.white70,
+          size: 40,
+        ),
+      ),
+    );
   }
 }

@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:intl/intl.dart';
 
 class SeatSelectionScreen extends StatefulWidget {
   final String hallId;
@@ -169,6 +170,7 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
         'totalPrice': totalPrice,
         'bookingTime': DateTime.now().toUtc().add(const Duration(hours: 5, minutes: 45)).toIso8601String(),
         'status': 'confirmed',
+        'ticketUrl': ticketUrl,
       });
       print('Order saved to Firestore with ID: ${orderRef.id}, Seats: $seatNames, Quantity: ${seatNames.length}');
       return orderRef.id;
@@ -232,6 +234,56 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
     }
   }
 
+  Future<Map<String, dynamic>> getShowtimeDetails() async {
+    try {
+      final movieDoc = await _firestore
+          .collection('halls')
+          .doc(widget.hallId)
+          .collection('movies')
+          .doc(widget.showtimeId)
+          .get();
+      if (movieDoc.exists) {
+        final data = movieDoc.data();
+        final dateStr = data?['date'] as String?;
+        final showTime = data?['showTime'] as String?;
+        if (dateStr != null && showTime != null) {
+          try {
+            final date = DateTime.parse(dateStr).toUtc().add(const Duration(hours: 5, minutes: 45));
+            final formattedDate = DateFormat('yyyy-MM-dd').format(date);
+            // Parse showTime (e.g., "10:00 AM")
+            final timeParts = showTime.split(':');
+            if (timeParts.isEmpty) return {'date': 'Unknown', 'time': 'Unknown'};
+            final hourStr = timeParts[0].trim();
+            final minuteStr = timeParts.length > 1 ? timeParts[1].replaceAll(RegExp(r'[^0-9]'), '') : '0';
+            final isAm = showTime.toLowerCase().contains('am');
+            final isPm = showTime.toLowerCase().contains('pm');
+            int hour = int.parse(hourStr);
+            final minute = int.parse(minuteStr);
+
+            if (isPm && hour != 12) {
+              hour += 12;
+            } else if (isAm && hour == 12) {
+              hour = 0;
+            }
+
+            final formattedTime = DateFormat('HH:mm').format(DateTime(0, 1, 1, hour, minute));
+            return {
+              'date': formattedDate,
+              'time': formattedTime,
+            };
+          } catch (e) {
+            print('Error parsing date or showTime: $e');
+            return {'date': 'Unknown', 'time': 'Unknown'};
+          }
+        }
+      }
+      return {'date': 'Unknown', 'time': 'Unknown'};
+    } catch (e) {
+      print('Error fetching showtime details: $e');
+      return {'date': 'Unknown', 'time': 'Unknown'};
+    }
+  }
+
   Future<Map<String, dynamic>> generateMovieTicketPDF({
     required String movieName,
     required String hallName,
@@ -239,9 +291,11 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
     required int quantity,
     required double price,
     required List<String> seatNames,
+    required String date,
+    required String time,
   }) async {
     try {
-      print('Generating PDF with: movieName=$movieName, hallName=$hallName, personName=$personName, quantity=$quantity, seatNames=$seatNames');
+      print('Generating PDF with: movieName=$movieName, hallName=$hallName, personName=$personName, quantity=$quantity, seatNames=$seatNames, date=$date, time=$time');
       if (seatNames.isEmpty) {
         throw Exception('No seats provided for PDF generation');
       }
@@ -262,7 +316,7 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
       }
 
       final pdf = pw.Document(compress: true);
-      final qrData = 'Movie: $movieName, Hall: $hallName, Name: $personName, Seats: ${seatNames.join(", ")}, Tickets: $quantity, Total: NPR ${price.toStringAsFixed(2)}';
+      final qrData = 'Movie: $movieName, Hall: $hallName, Name: $personName, Seats: ${seatNames.join(", ")}, Tickets: $quantity, Total: NPR ${price.toStringAsFixed(2)}, Date: $date, Time: $time';
       if (qrData.length > 2953) {
         throw Exception('QR data too long for encoding.');
       }
@@ -295,6 +349,8 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
                   pw.Text('Movie name: $movieName', style: const pw.TextStyle(fontSize: 16)),
                   pw.Text('Hall name: $hallName', style: const pw.TextStyle(fontSize: 16)),
                   pw.Text('Name: $personName', style: const pw.TextStyle(fontSize: 16)),
+                  pw.Text('Movie Date: $date', style: const pw.TextStyle(fontSize: 16)),
+                  pw.Text('Movie Time: $time', style: const pw.TextStyle(fontSize: 16)),
                   pw.Text('Booked Seats: ${seatNames.join(", ")}', style: const pw.TextStyle(fontSize: 16)),
                   pw.Text('Number of Tickets: $quantity', style: const pw.TextStyle(fontSize: 16)),
                   pw.Text('Total Price: NPR ${price.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 16)),
@@ -367,7 +423,6 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
       return;
     }
 
-    // Create a deep copy of seatNames to prevent state mutations
     final bookedSeatNames = List<String>.from(seatNames);
     final quantity = bookedSeatNames.length;
     print('Booking tickets: totalPrice=$totalPrice, seatNames=$bookedSeatNames, quantity=$quantity, uid=$uid');
@@ -393,7 +448,8 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
             print('Seat statuses updated for seats: $bookedSeatNames');
 
             final personName = await getUserName(uid);
-            print('Fetched user name: $personName, Quantity: $quantity, Seats: ${bookedSeatNames.join(", ")}');
+            final showtimeDetails = await getShowtimeDetails();
+            print('Fetched user name: $personName, Quantity: $quantity, Seats: ${bookedSeatNames.join(", ")}, Date: ${showtimeDetails['date']}, Time: ${showtimeDetails['time']}');
 
             bool pdfOpened = false;
             String? localFilePath;
@@ -406,6 +462,8 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
                 quantity: quantity,
                 price: totalPrice,
                 seatNames: bookedSeatNames,
+                date: showtimeDetails['date'],
+                time: showtimeDetails['time'],
               );
               localFilePath = pdfResult['filePath'];
               downloadUrl = pdfResult['downloadUrl'];
@@ -428,6 +486,8 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
                   content: Text(
                     'Your movie tickets for "${widget.movieName}" have been booked successfully!\n'
                         'Booked Seats: ${bookedSeatNames.join(", ")}\n'
+                        'Date: ${showtimeDetails['date']}\n'
+                        'Time: ${showtimeDetails['time']}\n'
                         'Number of Tickets: $quantity\n'
                         'Total Price: NPR ${totalPrice.toStringAsFixed(2)}\n'
                         '${pdfOpened ? "Ticket generated and opened." : "Ticket generation failed, but booking is confirmed. You can try downloading the ticket later."}',
